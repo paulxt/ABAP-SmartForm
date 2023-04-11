@@ -1,0 +1,171 @@
+*&---------------------------------------------------------------------*
+*& INCLUDE     TOP
+*&---------------------------------------------------------------------*
+TABLES: likp, lips.
+
+DATA: l_id       TYPE thead-tdid,
+      l_name     TYPE thead-tdname,
+      l_object   TYPE thead-tdobject.
+DATA: lt_lines LIKE STANDARD TABLE OF tline,
+      lwa_lines LIKE tline.
+
+DATA: w_ntgew TYPE ntgew_15,
+      w_vgbel TYPE vgbel,
+      w_adrnr TYPE adrnr,
+      w_price TYPE netpr,
+      w_page TYPE i,
+      w_div TYPE i,
+      w_mod TYPE i.
+
+"Check the
+DATA: BEGIN OF wa_zutm13,
+        bukrs TYPE zutm13-bukrs,
+        zz1_zzusecode01 TYPE zutm13-zz1_zzusecode01,
+        zz1_zzusecode02 TYPE zutm13-zz1_zzusecode02,
+        wa1(10),
+        wa2(10),
+        wa3(10),
+        wa4(10),
+        wa5(10),
+      END OF wa_zutm13,
+      t_zutm13 LIKE STANDARD TABLE OF wa_zutm13.
+
+*Main
+DATA: wa_head LIKE zsdr58,
+      t_head LIKE STANDARD TABLE OF wa_head.
+
+*Detail
+DATA: BEGIN OF wa_det,
+        vbeln TYPE lips-vbeln,
+        posnr TYPE lips-posnr,
+        "Header Need
+        vgbel TYPE lips-vgbel,
+        vgpos TYPE lips-vgpos,
+        "Detail
+        atwrt_e TYPE cawnt-atwtb,   "物料英文
+        atwrt_m TYPE cawnt-atwtb,   "物料中文
+        arktx TYPE lips-arktx,      "物料說明
+        lfimg TYPE lips-lfimg,      "交貨數量
+        vrkme TYPE lips-vrkme,
+        matnr TYPE lips-matnr,      "停藥期 品號
+        zz1period TYPE zppm50-zz1period,   "停藥期
+        ntgew TYPE lips-ntgew,      "淨重
+        matkl TYPE lips-matkl,
+        mtpos_mara TYPE mara-mtpos_mara,
+        adrnr TYPE vbpa-adrnr,
+        mseh3 TYPE t006a-mseh3,
+      END OF wa_det,
+      t_det LIKE STANDARD TABLE OF wa_det,
+      wa_det2 LIKE wa_det,
+      t_det2 LIKE STANDARD TABLE OF wa_det2.
+
+*VBAK
+DATA: BEGIN OF wa_vbak,
+        vbeln TYPE vbak-vbeln,
+        auart TYPE vbak-auart,
+        audat TYPE vbak-audat,
+      END OF wa_vbak,
+      t_vbak LIKE STANDARD TABLE OF wa_vbak.
+
+"VBAP
+DATA: BEGIN OF wa_vbap,
+        vbeln TYPE vbap-vbeln,
+        posnr TYPE vbap-posnr,
+        matnr TYPE vbap-matnr,
+        netwr TYPE vbap-netwr,
+        mwsbp TYPE vbap-mwsbp,
+      END OF wa_vbap,
+      t_vbap LIKE STANDARD TABLE OF wa_vbap.
+
+"VKKD
+DATA: BEGIN OF wa_vbkd,
+        vbeln TYPE vbkd-vbeln,
+        posnr TYPE vbkd-posnr,
+        kdkg1 TYPE vbkd-kdkg1,
+      END OF wa_vbkd,
+      t_vbkd LIKE STANDARD TABLE OF wa_vbkd.
+
+"Material
+DATA: BEGIN OF wa_mara,
+        matnr TYPE mara-matnr,
+        mtpos_mara TYPE mara-mtpos_mara,
+      END OF wa_mara,
+      t_mara LIKE STANDARD TABLE OF wa_mara.
+
+"特性值
+DATA: BEGIN OF wa_cha,
+        objek TYPE ausp-objek,
+        atwrt TYPE ausp-atwrt,
+        atnam TYPE cabn-atnam,
+      END OF wa_cha,
+      t_cha LIKE STANDARD TABLE OF wa_cha.
+
+"Partner
+DATA: BEGIN OF wa_par,
+        vbeln TYPE vbpa-vbeln,
+        parvw TYPE vbpa-parvw,
+        kunnr TYPE vbpa-kunnr,
+        adrnr TYPE vbpa-adrnr,
+      END OF wa_par,
+      t_par LIKE STANDARD TABLE OF wa_par.
+
+"Company
+DATA: BEGIN OF wa_tvko,
+        vkorg TYPE tvko-vkorg,
+        bukrs TYPE tvko-bukrs,
+      END OF wa_tvko,
+      t_tvko LIKE STANDARD TABLE OF wa_tvko.
+
+"Buyer
+DATA: BEGIN OF wa_but000,
+        partner TYPE but000-partner,
+        bu_sort1 TYPE but000-bu_sort1,
+      END OF wa_but000,
+      t_but000 LIKE STANDARD TABLE OF wa_but000.
+
+"Receiver
+DATA: BEGIN OF wa_adrc,
+        addrnumber TYPE adrc-addrnumber,
+        name1 TYPE adrc-name1,
+      END OF wa_adrc,
+      t_adrc LIKE STANDARD TABLE OF wa_adrc.
+
+"處方箋
+DATA: BEGIN OF wa_zppm50,
+        zz1sdgroup TYPE zppm50-zz1sdgroup,
+        zz1matnb TYPE zppm50-zz1matnb,
+        zz1period TYPE zppm50-zz1period,
+      END OF wa_zppm50,
+      t_zppm50 LIKE STANDARD TABLE OF wa_zppm50.
+
+DATA: BEGIN OF wa_t001,
+        bukrs TYPE t001-bukrs,
+        butxt TYPE t001-butxt,
+      END OF wa_t001,
+      t_t001 LIKE STANDARD TABLE OF wa_t001.
+
+DATA: BEGIN OF wa_t006a,
+        msehi TYPE t006a-msehi,
+        mseh3 TYPE t006a-mseh3,
+      END OF wa_t006a,
+      t_t006a LIKE STANDARD TABLE OF wa_t006a.
+
+"User-id 的預設
+DATA: BEGIN OF wa_usr05,
+        bname TYPE usr05-bname,
+        parid TYPE usr05-parid,
+        parva TYPE usr05-parva,
+      END OF wa_usr05,
+      t_usr05 LIKE STANDARD TABLE OF wa_usr05.
+
+*Smartform
+DATA: output_options     TYPE ssfcompop,
+      control_parameters TYPE ssfctrlop,
+      w_fm_name          TYPE rs38l_fnam.
+
+***********************************************************************
+* Selection Screen / Option / Parameter
+***********************************************************************
+PARAMETERS p_vkorg TYPE likp-vkorg OBLIGATORY.
+SELECT-OPTIONS: s_datum FOR likp-erdat OBLIGATORY DEFAULT sy-datum,
+                s_vbeln FOR likp-vbeln.
