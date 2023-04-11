@@ -1,0 +1,410 @@
+REPORT ZRSDSD MESSAGE-ID zsd.
+
+INCLUDE zrsdsd524top.
+***********************************************************************
+* INITIALIZATION
+***********************************************************************
+INITIALIZATION.
+    CLEAR wa_usr05.
+    READ TABLE t_usr05 INTO wa_usr05 WITH KEY parid = 'VKO'.
+    IF wa_usr05-parva IS NOT INITIAL.
+        p_vkorg = wa_usr05-parva.
+    ENDIF.
+***********************************************************************
+*AT SELECTION SCREEN
+***********************************************************************
+AT SELECTION-SCREEN.
+***********************************************************************
+* Start-of-selection PAUL
+***********************************************************************
+START-OF-SELECTION.
+    SELECT vkorg bukrs INTO CORRESPONDING FIELDS OF TABLE t_tvko FROM tvko
+      WHERE vkorg = p_vkorg.
+    CLEAR wa_tvko.
+    READ TABLE t_tvko INTO wa_tvko WITH KEY vkorg = p_vkorg.
+    SELECT bukrs zz1_zzusecode01 zz1_zzusecode02 FROM zutm13 INTO CORRESPONDING FIELDS OF TABLE t_zutm13
+      WHERE zz1_zzutcode = 'Z_DN_PG_PRINT_MD' AND bukrs = wa_tvko-bukrs.
+
+    PERFORM read_data.
+
+***********************************************************************
+* End-of-selection PAUL
+***********************************************************************
+END-OF-SELECTION.
+    IF t_head[] IS NOT INITIAL AND t_det[] IS NOT INITIAL.
+        PERFORM print_data.
+    ELSE.
+        MESSAGE s999 DISPLAY LIKE 'S'.
+    ENDIF.
+*&---------------------------------------------------------------------*
+*& Form read_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM read_data .
+    SELECT bukrs butxt INTO CORRESPONDING FIELDS OF TABLE t_t001 FROM t001 WHERE spras = sy-langu.
+    SELECT msehi mseh3 INTO CORRESPONDING FIELDS OF TABLE t_t006a FROM t006a WHERE spras = sy-langu.
+
+    "Main
+    SELECT k~vbeln p~spart k~lfart k~kunag k~werks INTO CORRESPONDING FIELDS OF TABLE t_head
+      FROM likp AS k
+      JOIN lips AS p ON k~vbeln = p~vbeln
+      WHERE k~vkorg = p_vkorg AND k~vbeln IN s_vbeln AND k~bldat IN s_datum
+      AND k~vbtyp = 'J'.
+*    "Check the Qualification
+*    LOOP AT t_head INTO wa_head .
+*        READ TABLE t_zutm13 INTO wa_zutm13 WITH KEY zz1_zzusecode01 = wa_head-spart.
+*        IF wa_zutm13 IS NOT INITIAL.
+*            SPLIT wa_zutm13-zz1_zzusecode02 AT ',' INTO wa_zutm13-wa1 wa_zutm13-wa2 wa_zutm13-wa3 wa_zutm13-wa4.
+*            IF wa_head-lfart <> wa_zutm13-wa1 AND wa_head-lfart <> wa_zutm13-wa2
+*              AND wa_head-lfart <> wa_zutm13-wa3 AND wa_head-lfart <> wa_zutm13-wa4.
+*                wa_head-zz = 'X'.
+*            ENDIF.
+*        ELSE.
+*            wa_head-zz = 'X'.
+*        ENDIF.
+*    ENDLOOP.
+*    DELETE t_head WHERE zz IS NOT INITIAL.
+
+
+
+    "Detail
+    IF t_head[] IS NOT INITIAL.
+        SELECT vbeln posnr vgbel vgpos arktx lfimg vrkme matnr ntgew matkl INTO CORRESPONDING FIELDS OF TABLE t_det
+          FROM lips
+          FOR ALL ENTRIES IN t_head
+          WHERE vbeln = t_head-vbeln.
+        SORT t_det BY vbeln posnr.
+    ENDIF.
+
+    SELECT vbeln auart audat INTO CORRESPONDING FIELDS OF TABLE t_vbak
+      FROM vbak
+      WHERE vkorg = p_vkorg.
+    IF t_vbak IS NOT INITIAL.
+        SELECT vbeln posnr matnr netwr mwsbp INTO CORRESPONDING FIELDS OF TABLE t_vbap
+          FROM vbap
+          FOR ALL ENTRIES IN t_vbak
+          WHERE vbeln = t_vbak-vbeln.
+    ENDIF.
+
+    SELECT partner bu_sort1 INTO CORRESPONDING FIELDS OF TABLE t_but000
+      FROM but000.
+    SELECT addrnumber name1 INTO CORRESPONDING FIELDS OF TABLE t_adrc FROM adrc.
+    SELECT zz1sdgroup zz1matnb zz1period INTO CORRESPONDING FIELDS OF TABLE t_zppm50 FROM zppm50.
+    SELECT vbeln parvw kunnr adrnr INTO CORRESPONDING FIELDS OF TABLE t_par FROM vbpa.
+    SELECT a~objek a~atwrt b~atnam INTO CORRESPONDING FIELDS OF TABLE t_cha
+      FROM ausp AS a
+      JOIN cabn AS b
+      ON a~atinn = b~atinn.
+
+    IF t_det[] IS NOT INITIAL.
+        SELECT matnr mtpos_mara INTO CORRESPONDING FIELDS OF TABLE t_mara FROM mara
+          FOR ALL ENTRIES IN t_det
+          WHERE matnr = t_det-matnr.
+
+        SELECT vbeln posnr kdkg1 INTO CORRESPONDING FIELDS OF TABLE t_vbkd FROM vbkd
+          FOR ALL ENTRIES IN t_det
+          WHERE vbeln = t_det-vgbel.
+    ENDIF.
+
+
+    PERFORM get_desc.
+
+    DELETE t_head WHERE vbeln_out IS INITIAL.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_desc
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_desc .
+
+    "Detail Data
+    CLEAR wa_det.
+    LOOP AT t_det INTO wa_det.
+        IF wa_det-vgpos IS INITIAL.
+            wa_det-vgpos = wa_det-posnr.
+        ENDIF.
+
+        CLEAR wa_t006a.
+        READ TABLE t_t006a INTO wa_t006a WITH KEY msehi = wa_det-vrkme.
+        wa_det-mseh3 = wa_t006a-mseh3.
+
+        "停藥期
+        CLEAR wa_zppm50.
+        READ TABLE t_zppm50 INTO wa_zppm50 WITH KEY zz1sdgroup = wa_det-matkl zz1matnb = wa_det-matnr.
+        wa_det-zz1period = wa_zppm50-zz1period.
+
+        "添加物名稱
+        CLEAR wa_cha.
+        READ TABLE t_cha INTO wa_cha WITH KEY objek = wa_det-matnr atnam = 'Z_FS_MC_010'.
+        IF wa_cha-atwrt IS NOT INITIAL.
+            wa_det-atwrt_e = wa_cha-atwrt.
+        ENDIF.
+        CLEAR wa_cha.
+        READ TABLE t_cha INTO wa_cha WITH KEY objek = wa_det-matnr atnam = 'Z_FS_MC_011'.
+        IF wa_cha-atwrt IS NOT INITIAL.
+            wa_det-atwrt_m = wa_cha-atwrt.
+        ENDIF.
+
+        "Condition Control
+        CLEAR wa_mara.
+        READ TABLE t_mara INTO wa_mara WITH KEY matnr = wa_det-matnr.
+        IF wa_mara-mtpos_mara <> 'Z002'.
+            CLEAR wa_cha.
+            READ TABLE t_cha INTO wa_cha WITH KEY objek = wa_det-matnr atnam = 'Z_FS_MC_007'.
+            IF wa_cha-atwrt IS INITIAL .
+*                CLEAR wa_det.
+                "If kdkg1 <> 01 02
+                CLEAR wa_vbkd.
+                READ TABLE t_vbkd INTO wa_vbkd WITH KEY vbeln = wa_det-vgbel posnr = wa_det-vgpos.
+                IF wa_vbkd-kdkg1 <> '01' OR wa_vbkd-kdkg1 <> '02'.
+                    CLEAR wa_det.
+                ENDIF.
+            ENDIF.
+        ENDIF.
+*
+*        "If kdkg1 <> 01 02
+*        CLEAR wa_vbkd.
+*        READ TABLE t_vbkd INTO wa_vbkd WITH KEY vbeln = wa_det-vgbel posnr = wa_det-vgpos.
+*        IF wa_vbkd-kdkg1 <> '01' OR wa_vbkd-kdkg1 <> '02'.
+*            CLEAR wa_det.
+*        ENDIF.
+
+        MODIFY t_det FROM wa_det.
+    ENDLOOP.
+    DELETE t_det WHERE vbeln IS INITIAL AND posnr IS INITIAL.
+
+    "Header Data
+    CLEAR wa_head.
+    LOOP AT t_head INTO wa_head.
+
+        CLEAR wa_det.
+        READ TABLE t_det INTO wa_det WITH KEY vbeln = wa_head-vbeln.
+        wa_head-vgbel = wa_det-vgbel.
+        wa_head-lfimg = wa_det-lfimg.
+        wa_head-vrkme = wa_det-vrkme.
+        wa_head-arktx = wa_det-arktx.
+        READ TABLE t_t006a INTO wa_t006a WITH KEY msehi = wa_det-vrkme.
+        wa_head-mseh3 = wa_t006a-mseh3.
+
+        CLEAR wa_tvko.
+        READ TABLE t_tvko INTO wa_tvko WITH KEY vkorg = p_vkorg.
+        CLEAR wa_t001.
+        READ TABLE t_t001 INTO wa_t001 WITH KEY bukrs = wa_tvko-bukrs.
+        wa_head-butxt = wa_t001-butxt.
+
+        CLEAR wa_but000.
+        READ TABLE t_but000 INTO wa_but000 WITH KEY partner = wa_head-kunag.
+        CONCATENATE wa_head-kunag wa_but000-bu_sort1 INTO wa_head-buyer SEPARATED BY space.
+
+        CLEAR wa_par.
+        READ TABLE t_par INTO wa_par WITH KEY vbeln = wa_head-vgbel parvw = 'WE'.
+        CLEAR wa_adrc.
+        READ TABLE t_adrc INTO wa_adrc WITH KEY addrnumber = wa_par-adrnr.
+        wa_head-receiver = wa_adrc-name1.
+
+        CLEAR wa_vbak.
+        READ TABLE t_vbak INTO wa_vbak WITH KEY vbeln = wa_head-vgbel.
+        CONCATENATE wa_vbak-auart wa_vbak-vbeln INTO wa_head-vgbel SEPARATED BY '-'.
+        wa_head-audat = wa_vbak-audat.
+
+        PERFORM convert_vbeln USING wa_head-vbeln.
+        l_name = wa_head-vbeln.
+        l_id = '0001'.
+        l_object = 'VBBK'.
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id = l_id
+            language = sy-langu
+            name = l_name
+            object = l_object
+          TABLES
+            lines = lt_lines
+          EXCEPTIONS
+            ID                            = 1
+            LANGUAGE                      = 2
+            NAME                          = 3
+            NOT_FOUND                     = 4
+            OBJECT                        = 5
+            REFERENCE_CHECK               = 6
+            WRONG_ACCESS_TO_ARCHIVE       = 7
+            OTHERS                        = 8.
+        CLEAR lwa_lines.
+        LOOP AT lt_lines INTO lwa_lines.
+            CONCATENATE wa_head-text lwa_lines-tdline INTO wa_head-text SEPARATED BY space.
+        ENDLOOP.
+
+
+        CONCATENATE wa_head-lfart wa_head-vbeln INTO wa_head-vbeln_out SEPARATED BY '-'.
+
+
+        "Calculation Additional Fee
+        CLEAR: wa_det, w_price, w_page.
+        LOOP AT t_det INTO wa_det WHERE vbeln = wa_head-vbeln.
+            IF wa_det-matkl = 'Y1' OR wa_det-matkl = 'Y2'
+              OR wa_det-matkl = 'Y3' OR wa_det-matkl = 'Y4'.
+                CLEAR wa_mara.
+                READ TABLE t_mara INTO wa_mara WITH KEY matnr = wa_det-matnr.
+                IF wa_mara-mtpos_mara <> 'Z001'.
+                    CLEAR wa_vbap.
+                    READ TABLE t_vbap INTO wa_vbap WITH KEY vbeln = wa_det-vgbel posnr = wa_det-vgpos.
+                    w_price = w_price + wa_vbap-netwr.
+                ENDIF.
+            ENDIF.
+            w_page = w_page + 1.
+        ENDLOOP.
+        "Calculate the Page
+        IF w_page > 12.
+            w_div = w_page div 12.
+            w_mod = w_page div 12.
+            IF w_mod = 0.
+                wa_head-page = w_div.
+            ELSE.
+                wa_head-page = w_div + 1.
+            ENDIF.
+        ELSE.
+            wa_head-page = '1'.
+        ENDIF.
+
+
+
+        IF w_price IS NOT INITIAL.
+            CLEAR wa_det.
+            READ TABLE t_det INTO wa_det WITH KEY vbeln = wa_head-vbeln.
+            IF wa_det-ntgew <> 0.
+                wa_head-fee_add = w_price / wa_det-ntgew.
+            ENDIF.
+        ENDIF.
+
+        CLEAR: t_det2[], wa_det.
+        LOOP AT t_det INTO wa_det WHERE vbeln = wa_head-vbeln.
+            MOVE-CORRESPONDING wa_det TO wa_det2.
+            APPEND wa_det2 TO t_det2.
+            CLEAR wa_det2.
+        ENDLOOP.
+        "If there's no details in document, Delete the doc.
+        IF sy-subrc <> 0.
+            CLEAR wa_head.
+        ENDIF.
+
+        "Delete the first item
+        IF t_det2[] IS NOT INITIAL.
+            DELETE t_det2 INDEX 1.
+        ENDIF.
+
+        "Footer Weight
+        CLEAR: wa_det, w_ntgew.
+        LOOP AT t_det2 INTO wa_det2 WHERE vbeln = wa_head-vbeln.
+            w_ntgew = w_ntgew + wa_det2-ntgew.
+        ENDLOOP.
+
+
+        IF w_ntgew IS NOT INITIAL.
+            wa_head-weight = w_ntgew.
+        ENDIF.
+
+
+        MODIFY t_head FROM wa_head.
+    ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form print_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM print_data .
+    DATA: ls_composer_param     TYPE ssfcompop.
+    DATA: lwa_lips  TYPE lips,
+          lwa_t001k TYPE t001k,
+          lwa_tvko  TYPE tvko.
+
+    control_parameters-no_dialog =      "是否彈出對話框
+    control_parameters-preview =        "預覽
+    output_options-tdnewid = 'X'.       "新的佇列請求
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZRSDSD524'
+      IMPORTING
+        fm_name            = w_fm_name
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+
+    SORT t_head BY vbeln.
+
+    CLEAR wa_head.
+    LOOP AT t_head INTO wa_head.
+
+      IF sy-ucomm = 'PRNT' OR sy-ucomm = 'VIEW'.
+        CLEAR: lwa_tvko.
+        SELECT SINGLE * FROM tvko INTO CORRESPONDING FIELDS OF lwa_tvko
+          WHERE vkorg = p_vkorg.
+        IF sy-subrc = 0.
+          SELECT SINGLE zz1_zzusecode03 FROM zutm13 INTO ls_composer_param-tddest
+            WHERE zz1_zzutcode = 'Z_DN_PG_DN_PRINT' AND bukrs = lwa_tvko-bukrs
+              AND zz1_zzusecode01 = wa_head-werks AND zz1_zzusecode02 = sy-uname.
+          IF sy-subrc <> 0.
+            SELECT SINGLE zz1_zzusecode03 FROM zutm13 INTO ls_composer_param-tddest
+              WHERE zz1_zzutcode = 'Z_DN_PG_DN_PRINT' AND bukrs = lwa_tvko-bukrs
+                AND zz1_zzusecode01 = wa_head-werks AND zz1_zzusecode02 = ''.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        IMPORT ls_composer_param-tddest FROM MEMORY ID 'ZZTDDEST'.
+      ENDIF.
+
+
+      AT FIRST.
+        control_parameters-no_close = 'X'.
+      ENDAT.
+      AT LAST.
+        control_parameters-no_close = space.
+      ENDAT.
+      CALL FUNCTION w_fm_name
+        EXPORTING
+          control_parameters = control_parameters
+          output_options     = output_options
+          user_settings      = space
+          is_head            = wa_head
+          prog_id            = sy-repid.
+      IF sy-subrc <> 0.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ENDIF.
+      control_parameters-no_open = 'X'.
+    ENDLOOP.
+    CLEAR: control_parameters-no_close, control_parameters-no_open.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form convert_vbeln
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM convert_vbeln USING l_input.
+
+     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input = l_input
+      IMPORTING
+        output = l_input.
+
+
+ENDFORM.
