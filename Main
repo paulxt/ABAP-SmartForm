@@ -1,6 +1,6 @@
-REPORT ZRSDSD MESSAGE-ID zsd.
+REPORT SDREPORT MESSAGE-ID zsd.
 
-INCLUDE zrsdsd524top.
+INCLUDE top.
 ***********************************************************************
 * INITIALIZATION
 ***********************************************************************
